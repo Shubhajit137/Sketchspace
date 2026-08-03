@@ -1,10 +1,12 @@
 {
-  "name": "backend",
+  "name": "sketchspace-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Real-time multiplayer backend for Sketchspace",
+  "main": "dist/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
   },
   "keywords": [],
   "author": "",
@@ -15,5 +17,12 @@
     "express": "^5.2.1",
     "nanoid": "^6.0.1",
     "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
   }
 }
