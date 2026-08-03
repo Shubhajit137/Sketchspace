@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
 
 :root {
   --accent: #234a51;
@@ -22,30 +23,24 @@
   --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
   --shadow-float: 0 2px 12px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
-}
 
-.dark {
-  --accent: #234a51;
-  --accent-hover: #2d636d;
-  --accent-light: #1a3338;
-  --accent-muted: rgba(35, 74, 81, 0.35);
+  /* Home page tokens — always dark now */
+  --home-bg: #06080f;
+  --home-card: rgba(12, 16, 28, 0.85);
+  --home-fg: #e8ecef;
+  --home-muted: #7a8f99;
+  --home-border: rgba(255, 255, 255, 0.08);
+  --home-input-bg: rgba(255, 255, 255, 0.05);
+  --home-placeholder: #3a4d5a;
 
-  --background: #1a1a1a;
-  --surface: #252525;
-  --surface-elevated: #2e2e2e;
-  --foreground: #ececec;
-  --muted: #9b9b9b;
-  --border: #3a3a3a;
-  --border-subtle: #2e2e2e;
-
-  --canvas-bg: #121212;
-  --panel-bg: rgba(37, 37, 37, 0.94);
-  --panel-border: rgba(255, 255, 255, 0.08);
-
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
-  --shadow-float: 0 2px 12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  /* Premium accent palette */
+  --violet: #7c3aed;
+  --violet-glow: rgba(124, 58, 237, 0.4);
+  --cyan: #06b6d4;
+  --cyan-glow: rgba(6, 182, 212, 0.35);
+  --pink: #ec4899;
+  --pink-glow: rgba(236, 72, 153, 0.3);
+  --emerald: #10b981;
 }
 
 @theme inline {
@@ -61,25 +56,33 @@
   --color-border: var(--border);
   --color-border-subtle: var(--border-subtle);
   --color-canvas-bg: var(--canvas-bg);
-  --font-sans: var(--font-geist-sans);
+  --color-home-bg: var(--home-bg);
+  --color-home-card: var(--home-card);
+  --color-home-fg: var(--home-fg);
+  --color-home-muted: var(--home-muted);
+  --color-home-border: var(--home-border);
+  --color-home-input-bg: var(--home-input-bg);
+  --color-home-placeholder: var(--home-placeholder);
+  --font-sans: "Inter", var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  font-family: "Inter", var(--font-geist-sans), system-ui, sans-serif;
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  background: color-mix(in srgb, var(--violet) 30%, transparent);
+  color: #fff;
 }
 
 input::placeholder {
-  color: var(--muted);
+  color: var(--home-placeholder);
 }
 
-/* Excalidraw-style floating panel */
+/* ── Excalidraw panel ── */
 .panel-float {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
@@ -98,51 +101,19 @@ input::placeholder {
   color: var(--muted);
   transition: background 0.15s, color 0.15s;
 }
-
 .tool-btn:hover {
   background: color-mix(in srgb, var(--foreground) 8%, transparent);
   color: var(--foreground);
 }
-
 .tool-btn.active {
   background: var(--accent-muted);
   color: var(--accent);
 }
-
 .tool-btn.active svg {
   stroke: var(--accent);
 }
 
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in {
-  animation: fade-in 0.4s ease-out forwards;
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-6px);
-  }
-}
-
-.animate-float {
-  animation: float 4s ease-in-out infinite;
-}
-
-/* Hide color input default styling */
+/* ── Color wheel input ── */
 .color-wheel-input {
   -webkit-appearance: none;
   appearance: none;
@@ -154,17 +125,227 @@ input::placeholder {
   padding: 0;
   overflow: hidden;
 }
+.color-wheel-input::-webkit-color-swatch-wrapper { padding: 0; }
+.color-wheel-input::-webkit-color-swatch { border: none; border-radius: 50%; }
+.color-wheel-input::-moz-color-swatch { border: none; border-radius: 50%; }
 
-.color-wheel-input::-webkit-color-swatch-wrapper {
-  padding: 0;
+/* ════════════════════════════════════════════════════════════
+   HOME PAGE — PREMIUM DARK ANIMATIONS
+   ════════════════════════════════════════════════════════════ */
+
+.bg-home-bg {
+  background: var(--home-bg);
 }
 
-.color-wheel-input::-webkit-color-swatch {
-  border: none;
-  border-radius: 50%;
+/* ── Floating orbs ── */
+@keyframes orb-drift-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(60px, -80px) scale(1.08); }
+  66%       { transform: translate(-40px, 50px) scale(0.95); }
+}
+@keyframes orb-drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  40%       { transform: translate(-70px, 60px) scale(1.1); }
+  80%       { transform: translate(50px, -40px) scale(0.92); }
+}
+@keyframes orb-drift-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25%       { transform: translate(40px, 70px) scale(1.06); }
+  75%       { transform: translate(-60px, -30px) scale(0.97); }
 }
 
-.color-wheel-input::-moz-color-swatch {
-  border: none;
+.orb-1 { animation: orb-drift-1 18s ease-in-out infinite; }
+.orb-2 { animation: orb-drift-2 22s ease-in-out infinite; }
+.orb-3 { animation: orb-drift-3 16s ease-in-out infinite; }
+
+/* ── Swirl flowing ── */
+@keyframes swirl-flow {
+  0%   { stroke-dashoffset: var(--swirl-len, 1000px); opacity: 0.25; }
+  15%  { opacity: 0.6; }
+  50%  { stroke-dashoffset: calc(var(--swirl-len, 1000px) * -0.5); opacity: 0.45; }
+  85%  { opacity: 0.6; }
+  100% { stroke-dashoffset: calc(var(--swirl-len, 1000px) * -1); opacity: 0.25; }
+}
+.swirl-draw {
+  stroke-dasharray: var(--swirl-len, 1000px);
+  animation: swirl-flow var(--swirl-dur, 6s) ease-in-out infinite;
+  animation-delay: var(--swirl-delay, 0s);
+}
+
+/* ── Dot pop ── */
+@keyframes dot-pop {
+  from  { opacity: 0; transform: scale(0); }
+  60%   { transform: scale(1.3); }
+  to    { opacity: 1; transform: scale(1); }
+}
+.dot-pop {
+  animation: dot-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  opacity: 0;
+}
+
+/* ── Cursor float ── */
+@keyframes cursor-float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-10px); }
+}
+.cursor-float {
+  position: absolute;
+  z-index: 5;
+  animation: cursor-float 4s ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+
+/* ── Card entrance ── */
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(32px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.card-enter {
+  animation: card-enter 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ── Gradient border rotation ── */
+@keyframes border-spin {
+  to { --border-angle: 360deg; }
+}
+@property --border-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+.gradient-border {
+  position: relative;
+  border-radius: 1.5rem;
+}
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  border-radius: 1.6rem;
+  background: conic-gradient(
+    from var(--border-angle),
+    transparent 20%,
+    #7c3aed 40%,
+    #06b6d4 55%,
+    #ec4899 70%,
+    transparent 85%
+  );
+  animation: border-spin 4s linear infinite;
+  z-index: -1;
+  opacity: 0.6;
+}
+
+/* ── Shimmer on inputs ── */
+@keyframes input-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.home-input {
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.home-input:focus {
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.25), 0 0 20px rgba(6, 182, 212, 0.1);
+  border-color: rgba(124, 58, 237, 0.5) !important;
+}
+
+/* ── CTA button pulse glow ── */
+@keyframes btn-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.4), 0 4px 24px rgba(124,58,237,0.3); }
+  50%       { box-shadow: 0 0 0 8px rgba(124,58,237,0), 0 4px 24px rgba(6,182,212,0.4); }
+}
+.btn-cta {
+  animation: btn-pulse 3s ease-in-out infinite;
+  transition: transform 0.18s, opacity 0.18s;
+}
+.btn-cta:hover {
+  transform: translateY(-2px);
+  opacity: 0.92;
+}
+.btn-cta:active {
+  transform: translateY(0);
+}
+
+/* ── Tag / badge pulse ── */
+@keyframes badge-glow {
+  0%, 100% { box-shadow: 0 0 6px rgba(16,185,129,0.3); }
+  50%       { box-shadow: 0 0 14px rgba(16,185,129,0.6); }
+}
+.badge-live {
+  animation: badge-glow 2.5s ease-in-out infinite;
+}
+
+/* ── Grid pattern overlay ── */
+.grid-overlay {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* ── Sketch preview strokes animate ── */
+@keyframes sketch-draw {
+  from { stroke-dashoffset: var(--sk-len, 400px); opacity: 0; }
+  10%  { opacity: 1; }
+  to   { stroke-dashoffset: 0; opacity: 0.85; }
+}
+.sketch-line {
+  stroke-dasharray: var(--sk-len, 400px);
+  stroke-dashoffset: var(--sk-len, 400px);
+  animation: sketch-draw var(--sk-dur, 2s) ease-out forwards;
+  animation-delay: var(--sk-delay, 0s);
+}
+
+/* ── Floating particles via CSS ── */
+@keyframes particle-rise {
+  0%   { transform: translateY(0) translateX(0) scale(1); opacity: 0.6; }
+  50%  { opacity: 1; }
+  100% { transform: translateY(-120px) translateX(var(--px-drift, 20px)) scale(0); opacity: 0; }
+}
+.particle {
+  position: absolute;
   border-radius: 50%;
+  animation: particle-rise var(--px-dur, 4s) ease-in infinite;
+  animation-delay: var(--px-delay, 0s);
+}
+
+/* ── Typewriter cursor blink ── */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+.cursor-blink {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: #7c3aed;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 1s step-end infinite;
+}
+
+/* ── Right panel art bob ── */
+@keyframes art-bob {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50%       { transform: translateY(-14px) rotate(1deg); }
+}
+.art-bob {
+  animation: art-bob 5s ease-in-out infinite;
+}
+
+/* ── Fade-in utility ── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out forwards;
+}
+
+/* ── Float utility ── */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-6px); }
+}
+.animate-float {
+  animation: float 4s ease-in-out infinite;
 }
