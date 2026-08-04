@@ -101,9 +101,4 @@ Sketchspace/
 
 ---
 
-## 🚀 Deployment
-
-- **Frontend** → [Vercel](https://vercel.com)
-- **Backend** → [Render](https://render.com)
-
 Environment variables are managed via `.env` (backend) and `.env.local` (frontend), with `.env.example` / `.env.local.example` templates committed for reference.
