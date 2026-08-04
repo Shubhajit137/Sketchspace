@@ -39,10 +39,10 @@ function renderElement(el: CanvasElement) {
       return (
         <rect
           key={el.id}
-          x={el.x}
-          y={el.y}
-          width={el.width ?? 0}
-          height={el.height ?? 0}
+          x={Math.min(el.x, el.x + (el.width ?? 0))}
+          y={Math.min(el.y, el.y + (el.height ?? 0))}
+          width={Math.abs(el.width ?? 0)}
+          height={Math.abs(el.height ?? 0)}
           {...common}
         />
       );
@@ -252,8 +252,8 @@ export function DrawingCanvas({
       previewElement.current = {
         id: previewElement.current?.id ?? nanoid(),
         type: state.tool as CanvasElement["type"],
-        x: Math.min(start.x, point.x),
-        y: Math.min(start.y, point.y),
+        x: start.x,
+        y: start.y,
         width: point.x - start.x,
         height: point.y - start.y,
         strokeColor: state.strokeColor,
