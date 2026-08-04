@@ -20,6 +20,7 @@ interface DrawingCanvasProps {
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
   onUpdateElement?: (id: string, patch: Partial<CanvasElement>) => void;
+  onViewportChange?: (viewport: { zoom: number; panX: number; panY: number }) => void;
 }
 
 interface Bounds {
@@ -252,8 +253,10 @@ export function DrawingCanvas({
   selectedId,
   onSelect,
   onUpdateElement,
+  onViewportChange,
 }: DrawingCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const currentPoints = useRef<number[][]>([]);
@@ -270,6 +273,35 @@ export function DrawingCanvas({
   useEffect(() => {
     setLocalPan({ x: state.panX, y: state.panY });
   }, [state.panX, state.panY]);
+
+  // Ctrl/Cmd + scroll = zoom toward the pointer
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const svg = svgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const cursorX = e.clientX - rect.left;
+      const cursorY = e.clientY - rect.top;
+      const newZoom = Math.min(
+        Math.max(state.zoom * (e.deltaY > 0 ? 0.9 : 1.1), 0.1),
+        4
+      );
+      // Canvas point currently under the cursor
+      const cx = (cursorX - localPan.x) / state.zoom;
+      const cy = (cursorY - localPan.y) / state.zoom;
+      // Adjust pan so that same canvas point stays under the cursor
+      const newPanX = cursorX - cx * newZoom;
+      const newPanY = cursorY - cy * newZoom;
+      setLocalPan({ x: newPanX, y: newPanY });
+      onViewportChange?.({ zoom: newZoom, panX: newPanX, panY: newPanY });
+    };
+    container.addEventListener("wheel", onWheel, { passive: false });
+    return () => container.removeEventListener("wheel", onWheel);
+  }, [state.zoom, localPan.x, localPan.y, onViewportChange]);
 
   // Spacebar = temporary hand tool (pan while held)
   useEffect(() => {
@@ -554,7 +586,7 @@ export function DrawingCanvas({
       : getCursor(state.tool);
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-canvas-bg">
+    <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-canvas-bg">
       <svg
         ref={svgRef}
         className="h-full w-full touch-none"

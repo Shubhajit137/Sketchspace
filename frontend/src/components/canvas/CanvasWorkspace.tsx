@@ -60,17 +60,12 @@ export function CanvasWorkspace({ code, username }: CanvasWorkspaceProps) {
     if (locked) setLockedTool(tool);
   };
 
-  useEffect(() => {
-    const onWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? 0.9 : 1.1;
-        updateState({ zoom: Math.min(Math.max(state.zoom * delta, 0.1), 4) });
-      }
-    };
-    window.addEventListener("wheel", onWheel, { passive: false });
-    return () => window.removeEventListener("wheel", onWheel);
-  }, [state.zoom, updateState]);
+  const handleViewportChange = useCallback(
+    (viewport: { zoom: number; panX: number; panY: number }) => {
+      updateState(viewport);
+    },
+    [updateState]
+  );
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -146,6 +141,7 @@ export function CanvasWorkspace({ code, username }: CanvasWorkspaceProps) {
         selectedId={selectedId}
         onSelect={setSelectedId}
         onUpdateElement={handleUpdateElement}
+        onViewportChange={handleViewportChange}
       />
 
       <SessionBar code={code} username={username} />
