@@ -2,8 +2,8 @@
 
 import { ColorSwatches } from "./ColorSwatches";
 import type { CanvasElement, CanvasState, StrokeStyle } from "@/lib/canvas/types";
-import { STROKE_WIDTHS } from "@/lib/canvas/types";
-import { Minus, GripHorizontal } from "lucide-react";
+import { FONT_SIZES, STROKE_WIDTHS } from "@/lib/canvas/types";
+import { Minus, GripHorizontal, Type } from "lucide-react";
 
 interface PropertiesPanelProps {
   state: CanvasState;
@@ -45,6 +45,7 @@ export function PropertiesPanel({
   const strokeWidth = editingElement ? el!.strokeWidth : state.strokeWidth;
   const strokeStyle = editingElement ? el!.strokeStyle : state.strokeStyle;
   const opacity = editingElement ? el!.opacity : state.opacity;
+  const fontSize = editingElement ? el!.fontSize ?? 20 : state.fontSize;
 
   const setStrokeColor = (c: string) =>
     editingElement
@@ -66,6 +67,13 @@ export function PropertiesPanel({
     editingElement
       ? onUpdateElement?.(el!.id, { opacity: o })
       : onUpdate({ opacity: o });
+  const setFontSize = (s: number) =>
+    editingElement
+      ? onUpdateElement?.(el!.id, { fontSize: s })
+      : onUpdate({ fontSize: s });
+
+  const isTextTarget =
+    editingElement ? el!.type === "text" : state.tool === "text";
 
   const showFill =
     editingElement
@@ -94,6 +102,31 @@ export function PropertiesPanel({
             onChange={setFillColor}
             showTransparent
           />
+        </div>
+      )}
+
+      {isTextTarget && (
+        <div className="mt-4">
+          <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted">
+            <Type size={12} />
+            Font size
+          </p>
+          <div className="flex gap-1">
+            {FONT_SIZES.map((s) => (
+              <button
+                key={s.value}
+                onClick={() => setFontSize(s.value)}
+                className={`flex flex-1 items-center justify-center rounded-lg py-1.5 transition-colors ${
+                  fontSize === s.value
+                    ? "bg-accent-muted text-accent"
+                    : "text-muted hover:bg-foreground/5"
+                }`}
+                title={`Font ${s.label}`}
+              >
+                <span style={{ fontSize: s.value * 0.7 }}>{s.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

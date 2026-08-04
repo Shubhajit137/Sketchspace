@@ -221,6 +221,10 @@ function renderElement(el: CanvasElement) {
           opacity={opacity}
           fontFamily="var(--font-geist-sans), system-ui, sans-serif"
           dominantBaseline="hanging"
+          stroke={el.strokeColor}
+          strokeWidth={el.strokeWidth > 1 ? el.strokeWidth * 0.15 : 0}
+          strokeLinejoin="round"
+          paintOrder="stroke"
         >
           {el.text}
         </text>
@@ -264,8 +268,11 @@ export function DrawingCanvas({
   const previewElement = useRef<CanvasElement | null>(null);
   const panStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const [localPan, setLocalPan] = useState({ x: state.panX, y: state.panY });
-  const [textInput, setTextInput] = useState<{ x: number; y: number; screenX: number; screenY: number } | null>(null);
+  const [textInput, setTextInput] = useState<{ x: number; y: number; screenX: number; screenY: number; fontSize: number } | null>(null);
   const [textValue, setTextValue] = useState("");
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
+  const textJustMounted = useRef(false);
   const spacePressed = useRef(false);
   const moveRef = useRef<{ startPoint: Point; origElement: CanvasElement } | null>(null);
   const resizeRef = useRef<{ handle: ResizeHandle; origBounds: Bounds } | null>(null);
@@ -273,6 +280,37 @@ export function DrawingCanvas({
   useEffect(() => {
     setLocalPan({ x: state.panX, y: state.panY });
   }, [state.panX, state.panY]);
+
+  // Focus the text input reliably when it appears (using rAF so focus
+  // takes effect after the pointer event cycle settles).
+  useEffect(() => {
+    if (textInput) {
+      const raf = requestAnimationFrame(() => {
+        textJustMounted.current = true;
+        textInputRef.current?.focus({ preventScroll: true });
+        setTimeout(() => {
+          textJustMounted.current = false;
+        }, 200);
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [textInput]);
+
+  // Commit text when the user clicks/taps outside the input.
+  useEffect(() => {
+    if (!textInput) return;
+    const onDocPointerDown = (e: PointerEvent) => {
+      const el = textInputRef.current;
+      if (el && e.target instanceof Node && !el.contains(e.target)) {
+        // Ignore the pointerdown that initially created this input (it
+        // happens before the input exists, so target is the SVG).
+        if (textJustMounted.current) return;
+        commitTextRef.current();
+      }
+    };
+    document.addEventListener("pointerdown", onDocPointerDown);
+    return () => document.removeEventListener("pointerdown", onDocPointerDown);
+  }, [textInput]);
 
   // Ctrl/Cmd + scroll = zoom toward the pointer
   useEffect(() => {
@@ -375,6 +413,26 @@ export function DrawingCanvas({
     [elements]
   );
 
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    const point = getPoint(e.clientX, e.clientY);
+    if (!point) return;
+    const idx = findElementAtPoint(point, 10 / state.zoom);
+    if (idx >= 0 && elements[idx].type === "text") {
+      const el = elements[idx];
+      const rect = svgRef.current!.getBoundingClientRect();
+      setTextInput({
+        x: el.x,
+        y: el.y,
+        screenX: rect.left + localPan.x + el.x * state.zoom,
+        screenY: rect.top + localPan.y + el.y * state.zoom,
+        fontSize: el.fontSize ?? 20,
+      });
+      setTextValue(el.text ?? "");
+      setEditingTextId(el.id);
+      onSelect?.(el.id);
+    }
+  };
+
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     const point = getPoint(e.clientX, e.clientY);
@@ -411,11 +469,15 @@ export function DrawingCanvas({
 
     if (state.tool === "text") {
       const rect = svgRef.current!.getBoundingClientRect();
+      // Set the guard synchronously so an immediate blur (from the
+      // pointerdown that just created this input) is ignored.
+      textJustMounted.current = true;
       setTextInput({
         x: point.x,
         y: point.y,
         screenX: e.clientX - rect.left,
         screenY: e.clientY - rect.top,
+        fontSize: state.fontSize,
       });
       setTextValue("");
       return;
@@ -538,30 +600,58 @@ export function DrawingCanvas({
     currentPoints.current = [];
   };
 
+  const commitTextRef = useRef<() => void>(() => {});
+
   const commitText = () => {
-    if (!textInput || !textValue.trim()) {
-      setTextInput(null);
+    if (!textInput) {
+      setEditingTextId(null);
       return;
     }
-    onElementsChange([
-      ...elements,
-      {
-        id: nanoid(),
-        type: "text",
-        x: textInput.x,
-        y: textInput.y,
+    if (!textValue.trim()) {
+      // Empty text: if editing existing, delete it; otherwise just cancel
+      if (editingTextId) {
+        onElementsChange(elements.filter((el) => el.id !== editingTextId));
+      }
+      setTextInput(null);
+      setTextValue("");
+      setEditingTextId(null);
+      return;
+    }
+    if (editingTextId) {
+      // Update existing text element — preserve its existing properties
+      const existing = elements.find((el) => el.id === editingTextId);
+      onUpdateElement?.(editingTextId, {
         text: textValue.trim(),
-        fontSize: 20,
-        strokeColor: state.strokeColor,
-        fillColor: "transparent",
-        strokeWidth: state.strokeWidth,
-        strokeStyle: state.strokeStyle,
-        opacity: state.opacity,
-      },
-    ]);
+        fontSize: existing?.fontSize ?? state.fontSize,
+        strokeColor: existing?.strokeColor ?? state.strokeColor,
+        strokeWidth: existing?.strokeWidth ?? state.strokeWidth,
+        strokeStyle: existing?.strokeStyle ?? state.strokeStyle,
+        opacity: existing?.opacity ?? state.opacity,
+      });
+    } else {
+      // Create new text element
+      onElementsChange([
+        ...elements,
+        {
+          id: nanoid(),
+          type: "text",
+          x: textInput.x,
+          y: textInput.y,
+          text: textValue.trim(),
+          fontSize: state.fontSize,
+          strokeColor: state.strokeColor,
+          fillColor: "transparent",
+          strokeWidth: state.strokeWidth,
+          strokeStyle: state.strokeStyle,
+          opacity: state.opacity,
+        },
+      ]);
+    }
     setTextInput(null);
     setTextValue("");
+    setEditingTextId(null);
   };
+  commitTextRef.current = commitText;
 
   const allElements = previewElement.current
     ? [...elements, previewElement.current]
@@ -595,6 +685,7 @@ export function DrawingCanvas({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
+        onDoubleClick={handleDoubleClick}
       >
         <rect width="100%" height="100%" fill="var(--canvas-bg)" />
         <g transform={`translate(${localPan.x}, ${localPan.y}) scale(${state.zoom})`}>
@@ -638,20 +729,23 @@ export function DrawingCanvas({
 
       {textInput && (
         <input
-          autoFocus
+          ref={textInputRef}
           value={textValue}
           onChange={(e) => setTextValue(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") commitText();
-            if (e.key === "Escape") setTextInput(null);
+            if (e.key === "Escape") {
+              setTextInput(null);
+              setTextValue("");
+              setEditingTextId(null);
+            }
           }}
-          onBlur={commitText}
-          className="absolute z-10 min-w-[120px] border-none bg-transparent outline-none"
+          className="absolute z-10 min-w-[160px] rounded-md border border-accent/50 bg-background/70 px-1.5 py-0.5 outline-none"
           style={{
             left: textInput.screenX,
             top: textInput.screenY,
             color: state.strokeColor,
-            fontSize: 20,
+            fontSize: textInput.fontSize,
             transform: `scale(${state.zoom})`,
             transformOrigin: "top left",
           }}

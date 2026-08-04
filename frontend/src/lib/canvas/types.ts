@@ -37,6 +37,7 @@ export interface CanvasState {
   strokeWidth: number;
   strokeStyle: StrokeStyle;
   opacity: number;
+  fontSize: number;
   zoom: number;
   panX: number;
   panY: number;
@@ -53,6 +54,13 @@ export const STROKE_WIDTHS = [
   { label: "Bold", value: 4 },
 ] as const;
 
+export const FONT_SIZES = [
+  { label: "S", value: 14 },
+  { label: "M", value: 20 },
+  { label: "L", value: 32 },
+  { label: "XL", value: 48 },
+] as const;
+
 export const DEFAULT_CANVAS_STATE: CanvasState = {
   tool: "pen",
   strokeColor: "#E8A598",
@@ -60,6 +68,7 @@ export const DEFAULT_CANVAS_STATE: CanvasState = {
   strokeWidth: 2,
   strokeStyle: "solid",
   opacity: 100,
+  fontSize: 20,
   zoom: 1,
   panX: 0,
   panY: 0,
