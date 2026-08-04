@@ -17,6 +17,132 @@ interface DrawingCanvasProps {
   elements: CanvasElement[];
   onElementsChange: (elements: CanvasElement[]) => void;
   onDrawingChange?: (drawing: boolean) => void;
+  selectedId?: string | null;
+  onSelect?: (id: string | null) => void;
+  onUpdateElement?: (id: string, patch: Partial<CanvasElement>) => void;
+}
+
+interface Bounds {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
+
+const HANDLE_POSITIONS: Record<ResizeHandle, (b: Bounds) => Point> = {
+  nw: (b) => ({ x: b.x, y: b.y }),
+  n: (b) => ({ x: b.x + b.w / 2, y: b.y }),
+  ne: (b) => ({ x: b.x + b.w, y: b.y }),
+  e: (b) => ({ x: b.x + b.w, y: b.y + b.h / 2 }),
+  se: (b) => ({ x: b.x + b.w, y: b.y + b.h }),
+  s: (b) => ({ x: b.x + b.w / 2, y: b.y + b.h }),
+  sw: (b) => ({ x: b.x, y: b.y + b.h }),
+  w: (b) => ({ x: b.x, y: b.y + b.h / 2 }),
+};
+
+const HANDLE_CURSORS: Record<ResizeHandle, string> = {
+  nw: "nwse-resize",
+  n: "ns-resize",
+  ne: "nesw-resize",
+  e: "ew-resize",
+  se: "nwse-resize",
+  s: "ns-resize",
+  sw: "nesw-resize",
+  w: "ew-resize",
+};
+
+function getElementBounds(el: CanvasElement): Bounds {
+  if (el.type === "freehand" && el.points && el.points.length) {
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
+    for (const [px, py] of el.points) {
+      minX = Math.min(minX, px);
+      minY = Math.min(minY, py);
+      maxX = Math.max(maxX, px);
+      maxY = Math.max(maxY, py);
+    }
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+  }
+  if (el.type === "text") {
+    const fs = el.fontSize ?? 20;
+    return { x: el.x, y: el.y, w: (el.text?.length ?? 1) * fs * 0.6, h: fs };
+  }
+  const w = Math.abs(el.width ?? 0);
+  const h = Math.abs(el.height ?? 0);
+  const x = el.type === "rectangle" ? Math.min(el.x, el.x + (el.width ?? 0)) : el.x;
+  const y = el.type === "rectangle" ? Math.min(el.y, el.y + (el.height ?? 0)) : el.y;
+  return { x, y, w, h };
+}
+
+function moveElement(el: CanvasElement, dx: number, dy: number): CanvasElement {
+  if (el.type === "freehand" && el.points) {
+    const points = el.points.map(([px, py, p]) => [px + dx, py + dy, p]);
+    return {
+      ...el,
+      x: el.x + dx,
+      y: el.y + dy,
+      points,
+      path: createFreehandPath(points, el.strokeWidth),
+    };
+  }
+  return { ...el, x: el.x + dx, y: el.y + dy };
+}
+
+function scaleElement(el: CanvasElement, orig: Bounds, next: Bounds): CanvasElement {
+  const sx = next.w / (orig.w || 1);
+  const sy = next.h / (orig.h || 1);
+  if (el.type === "freehand" && el.points) {
+    const points = el.points.map(([px, py, p]) => [
+      next.x + (px - orig.x) * sx,
+      next.y + (py - orig.y) * sy,
+      p,
+    ]);
+    return {
+      ...el,
+      x: next.x,
+      y: next.y,
+      points,
+      path: createFreehandPath(points, el.strokeWidth),
+    };
+  }
+  if (el.type === "text") {
+    return { ...el, x: next.x, y: next.y, fontSize: Math.max(8, Math.round(next.h)) };
+  }
+  if (el.type === "line" || el.type === "arrow") {
+    const x1 = next.x + (el.x - orig.x) * sx;
+    const y1 = next.y + (el.y - orig.y) * sy;
+    const x2 = next.x + (el.x + (el.width ?? 0) - orig.x) * sx;
+    const y2 = next.y + (el.y + (el.height ?? 0) - orig.y) * sy;
+    return { ...el, x: x1, y: y1, width: x2 - x1, height: y2 - y1 };
+  }
+  return { ...el, x: next.x, y: next.y, width: next.w, height: next.h };
+}
+
+function computeResizeBounds(handle: ResizeHandle, orig: Bounds, point: Point): Bounds {
+  const min = 5;
+  let x = orig.x,
+    y = orig.y,
+    w = orig.w,
+    h = orig.h;
+  if (handle.includes("w")) {
+    x = Math.min(point.x, orig.x + orig.w - min);
+    w = orig.x + orig.w - x;
+  }
+  if (handle.includes("e")) {
+    w = Math.max(point.x - orig.x, min);
+  }
+  if (handle.includes("n")) {
+    y = Math.min(point.y, orig.y + orig.h - min);
+    h = orig.y + orig.h - y;
+  }
+  if (handle.includes("s")) {
+    h = Math.max(point.y - orig.y, min);
+  }
+  return { x, y, w, h };
 }
 
 function renderElement(el: CanvasElement) {
@@ -123,6 +249,9 @@ export function DrawingCanvas({
   elements,
   onElementsChange,
   onDrawingChange,
+  selectedId,
+  onSelect,
+  onUpdateElement,
 }: DrawingCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -134,10 +263,36 @@ export function DrawingCanvas({
   const [localPan, setLocalPan] = useState({ x: state.panX, y: state.panY });
   const [textInput, setTextInput] = useState<{ x: number; y: number; screenX: number; screenY: number } | null>(null);
   const [textValue, setTextValue] = useState("");
+  const spacePressed = useRef(false);
+  const moveRef = useRef<{ startPoint: Point; origElement: CanvasElement } | null>(null);
+  const resizeRef = useRef<{ handle: ResizeHandle; origBounds: Bounds } | null>(null);
 
   useEffect(() => {
     setLocalPan({ x: state.panX, y: state.panY });
   }, [state.panX, state.panY]);
+
+  // Spacebar = temporary hand tool (pan while held)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.code === "Space" &&
+        !(e.target instanceof HTMLInputElement) &&
+        !(e.target instanceof HTMLTextAreaElement)
+      ) {
+        e.preventDefault();
+        spacePressed.current = true;
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") spacePressed.current = false;
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, []);
 
   const getPoint = useCallback(
     (clientX: number, clientY: number): Point | null => {
@@ -165,20 +320,60 @@ export function DrawingCanvas({
     }
   }, [elements, onElementsChange]);
 
+  const findElementAtPoint = useCallback(
+    (point: Point, tolerance: number): number => {
+      for (let i = elements.length - 1; i >= 0; i--) {
+        const el = elements[i];
+        if (el.type === "freehand" && el.points) {
+          for (const [px, py] of el.points) {
+            if (Math.hypot(px - point.x, py - point.y) < tolerance) return i;
+          }
+        } else if (el.width !== undefined && el.height !== undefined) {
+          const x1 = Math.min(el.x, el.x + el.width) - tolerance;
+          const y1 = Math.min(el.y, el.y + el.height) - tolerance;
+          const x2 = Math.max(el.x, el.x + el.width) + tolerance;
+          const y2 = Math.max(el.y, el.y + el.height) + tolerance;
+          if (point.x >= x1 && point.x <= x2 && point.y >= y1 && point.y <= y2) return i;
+        } else if (el.type === "text") {
+          if (Math.hypot(el.x - point.x, el.y - point.y) < tolerance * 2) return i;
+        }
+      }
+      return -1;
+    },
+    [elements]
+  );
+
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     const point = getPoint(e.clientX, e.clientY);
     if (!point) return;
 
+    // Spacebar + left mouse = temporary hand tool (pan)
+    if (spacePressed.current) {
+      setIsPanning(true);
+      panStart.current = { x: e.clientX, y: e.clientY, panX: localPan.x, panY: localPan.y };
+      (e.target as Element).setPointerCapture(e.pointerId);
+      return;
+    }
+
     if (state.tool === "hand") {
       setIsPanning(true);
-      panStart.current = {
-        x: e.clientX,
-        y: e.clientY,
-        panX: localPan.x,
-        panY: localPan.y,
-      };
+      panStart.current = { x: e.clientX, y: e.clientY, panX: localPan.x, panY: localPan.y };
       (e.target as Element).setPointerCapture(e.pointerId);
+      return;
+    }
+
+    // Select tool: hit test to pick an element
+    if (state.tool === "select") {
+      const idx = findElementAtPoint(point, 10 / state.zoom);
+      if (idx >= 0) {
+        const el = elements[idx];
+        onSelect?.(el.id);
+        moveRef.current = { startPoint: point, origElement: el };
+        (e.target as Element).setPointerCapture(e.pointerId);
+      } else {
+        onSelect?.(null);
+      }
       return;
     }
 
@@ -215,7 +410,7 @@ export function DrawingCanvas({
         opacity: state.opacity,
       };
     } else if (state.tool === "eraser") {
-      const hitIndex = findElementAtPoint(elements, point, 20);
+      const hitIndex = findElementAtPoint(point, 20);
       if (hitIndex >= 0) {
         onElementsChange(elements.filter((_, i) => i !== hitIndex));
       }
@@ -233,10 +428,28 @@ export function DrawingCanvas({
       return;
     }
 
-    if (!isDrawing || !shapeStart.current) return;
     const point = getPoint(e.clientX, e.clientY);
     if (!point) return;
 
+    // Move selected element
+    if (state.tool === "select" && moveRef.current) {
+      const { startPoint, origElement } = moveRef.current;
+      const dx = point.x - startPoint.x;
+      const dy = point.y - startPoint.y;
+      onUpdateElement?.(origElement.id, moveElement(origElement, dx, dy));
+      return;
+    }
+
+    // Resize selected element
+    if (state.tool === "select" && resizeRef.current) {
+      const { handle, origBounds } = resizeRef.current;
+      const next = computeResizeBounds(handle, origBounds, point);
+      const el = elements.find((el) => el.id === selectedId);
+      if (el) onUpdateElement?.(el.id, scaleElement(el, origBounds, next));
+      return;
+    }
+
+    if (!isDrawing || !shapeStart.current) return;
     const start = shapeStart.current;
 
     if (state.tool === "pen") {
@@ -264,7 +477,7 @@ export function DrawingCanvas({
       };
       forceUpdate();
     } else if (state.tool === "eraser") {
-      const hitIndex = findElementAtPoint(elements, point, 20);
+      const hitIndex = findElementAtPoint(point, 20);
       if (hitIndex >= 0) {
         onElementsChange(elements.filter((_, i) => i !== hitIndex));
       }
@@ -278,6 +491,11 @@ export function DrawingCanvas({
     if (isPanning) {
       setIsPanning(false);
       panStart.current = null;
+      return;
+    }
+    if (state.tool === "select") {
+      moveRef.current = null;
+      resizeRef.current = null;
       return;
     }
     if (!isDrawing) return;
@@ -317,12 +535,30 @@ export function DrawingCanvas({
     ? [...elements, previewElement.current]
     : elements;
 
+  const selectedElement = selectedId
+    ? elements.find((el) => el.id === selectedId)
+    : null;
+  const selectedBounds = selectedElement ? getElementBounds(selectedElement) : null;
+
+  const handleResizeStart = (e: React.PointerEvent, handle: ResizeHandle) => {
+    e.stopPropagation();
+    if (!selectedElement || !selectedBounds) return;
+    resizeRef.current = { handle, origBounds: selectedBounds };
+    (e.target as Element).setPointerCapture(e.pointerId);
+  };
+
+  const cursor = isPanning
+    ? "grabbing"
+    : spacePressed.current
+      ? "grab"
+      : getCursor(state.tool);
+
   return (
     <div className="relative h-full w-full overflow-hidden bg-canvas-bg">
       <svg
         ref={svgRef}
         className="h-full w-full touch-none"
-        style={{ cursor: isPanning ? "grabbing" : getCursor(state.tool) }}
+        style={{ cursor }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -331,6 +567,40 @@ export function DrawingCanvas({
         <rect width="100%" height="100%" fill="var(--canvas-bg)" />
         <g transform={`translate(${localPan.x}, ${localPan.y}) scale(${state.zoom})`}>
           {allElements.map(renderElement)}
+
+          {/* Selection overlay: bounding box + resize handles */}
+          {state.tool === "select" && selectedElement && selectedBounds && (
+            <g>
+              <rect
+                x={selectedBounds.x}
+                y={selectedBounds.y}
+                width={selectedBounds.w}
+                height={selectedBounds.h}
+                fill="none"
+                stroke="var(--accent)"
+                strokeWidth={1.5 / state.zoom}
+                strokeDasharray={`${4 / state.zoom} ${3 / state.zoom}`}
+                pointerEvents="none"
+              />
+              {(Object.keys(HANDLE_POSITIONS) as ResizeHandle[]).map((h) => {
+                const p = HANDLE_POSITIONS[h](selectedBounds);
+                return (
+                  <rect
+                    key={h}
+                    x={p.x - 4 / state.zoom}
+                    y={p.y - 4 / state.zoom}
+                    width={8 / state.zoom}
+                    height={8 / state.zoom}
+                    fill="var(--surface)"
+                    stroke="var(--accent)"
+                    strokeWidth={1.5 / state.zoom}
+                    style={{ cursor: HANDLE_CURSORS[h] }}
+                    onPointerDown={(e) => handleResizeStart(e, h)}
+                  />
+                );
+              })}
+            </g>
+          )}
         </g>
       </svg>
 
@@ -358,26 +628,6 @@ export function DrawingCanvas({
       )}
     </div>
   );
-}
-
-function findElementAtPoint(elements: CanvasElement[], point: Point, tolerance: number): number {
-  for (let i = elements.length - 1; i >= 0; i--) {
-    const el = elements[i];
-    if (el.type === "freehand" && el.points) {
-      for (const [px, py] of el.points) {
-        if (Math.hypot(px - point.x, py - point.y) < tolerance) return i;
-      }
-    } else if (el.width !== undefined && el.height !== undefined) {
-      const x1 = Math.min(el.x, el.x + el.width) - tolerance;
-      const y1 = Math.min(el.y, el.y + el.height) - tolerance;
-      const x2 = Math.max(el.x, el.x + el.width) + tolerance;
-      const y2 = Math.max(el.y, el.y + el.height) + tolerance;
-      if (point.x >= x1 && point.x <= x2 && point.y >= y1 && point.y <= y2) return i;
-    } else if (el.type === "text") {
-      if (Math.hypot(el.x - point.x, el.y - point.y) < tolerance * 2) return i;
-    }
-  }
-  return -1;
 }
 
 export { DEFAULT_CANVAS_STATE };

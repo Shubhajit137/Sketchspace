@@ -22,6 +22,7 @@ export function CanvasWorkspace({ code, username }: CanvasWorkspaceProps) {
   const [historyIndex, setHistoryIndex] = useState(0);
   const [locked, setLocked] = useState(false);
   const [lockedTool, setLockedTool] = useState<Tool>("pen");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const updateState = useCallback((patch: Partial<CanvasState>) => {
     setState((prev) => ({ ...prev, ...patch }));
@@ -43,6 +44,15 @@ export function CanvasWorkspace({ code, username }: CanvasWorkspaceProps) {
       pushHistory(newElements);
     },
     [pushHistory]
+  );
+
+  const handleUpdateElement = useCallback(
+    (id: string, patch: Partial<CanvasElement>) => {
+      setElements((prev) =>
+        prev.map((el) => (el.id === id ? { ...el, ...patch } : el))
+      );
+    },
+    []
   );
 
   const handleToolChange = (tool: Tool) => {
@@ -121,7 +131,11 @@ export function CanvasWorkspace({ code, username }: CanvasWorkspaceProps) {
   const zoomOut = () => updateState({ zoom: Math.max(state.zoom / 1.2, 0.1) });
   const resetZoom = () => updateState({ zoom: 1 });
 
-  const showProperties = state.tool !== "hand" && state.tool !== "select" && state.tool !== "eraser";
+  const selectedElement = selectedId
+    ? elements.find((el) => el.id === selectedId) ?? null
+    : null;
+
+  const showProperties = state.tool !== "hand" && state.tool !== "eraser";
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-canvas-bg">
@@ -129,6 +143,9 @@ export function CanvasWorkspace({ code, username }: CanvasWorkspaceProps) {
         state={state}
         elements={elements}
         onElementsChange={handleElementsChange}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        onUpdateElement={handleUpdateElement}
       />
 
       <SessionBar code={code} username={username} />
@@ -144,7 +161,12 @@ export function CanvasWorkspace({ code, username }: CanvasWorkspaceProps) {
       />
 
       {showProperties && (
-        <PropertiesPanel state={state} onUpdate={updateState} />
+        <PropertiesPanel
+          state={state}
+          onUpdate={updateState}
+          selectedElement={selectedElement}
+          onUpdateElement={handleUpdateElement}
+        />
       )}
 
       <ZoomControls
